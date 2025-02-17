@@ -3,8 +3,7 @@
 <template>
     <main>
         <div>
-            <!-- <img src="../assets/images/logo_dass.webp" alt=""> -->
-            <img src="../assets/images/logo_dass.webp" alt="logo">
+            <img src="../assets/images/JFHTECH-transp.png" alt="logo">
         </div>
     </main>
 </template>

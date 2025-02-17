@@ -1,10 +1,30 @@
 <script setup>
-import { computed, ref } from "vue";
+import { ref } from "vue";
 import api from "../../services/api";
 
 import { useRouter } from "vue-router";
+import { z } from "zod";
 
 const router = useRouter();
+
+const formSchema = z.object({
+    cpf: z.string().regex(/^\d{3}\.\d{3}\.\d{3}-\d{2}$/, "CPF inválido"),
+    nome: z.string().min(1, "Nome obrigatório"),
+    email: z.string().email("Email inválido"),
+    camiseta: z.enum(["PP", "P", "M", "G", "GG", "XG"], {
+        errorMap: () => ({ message: "Tamanho de camiseta inválido" }),
+    }),
+    calcado: z.number().min(34, "O tamanho deve ser no mínimo 34").max(48, "O tamanho deve ser no máximo 48"),
+});
+
+const errors = ref({
+    cpf: null,
+    nome: null,
+    email: null,
+    camiseta: null,
+    calcado: null,
+});
+
 
 const form = ref({
     cpf: "",
@@ -16,39 +36,53 @@ const form = ref({
 
 const tamanhosCamiseta = ["PP", "P", "M", "G", "GG", "XG"];
 
-const validCpf = computed(() => /^\d{3}\.\d{3}\.\d{3}-\d{2}$/.test(form.value.cpf));
-const validEmail = computed(() => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.value.email));
-
-const formValido = computed(() => {
-    return validCpf.value && form.value.nome && validEmail.value && form.value.camiseta && form.value.calcado >= 34 && form.value.calcado <= 48;
-});
+const validateForm = () => {
+    const result = formSchema.safeParse(form.value);
+    if (!result.success) {
+        errors.value = {
+            cpf: null,
+            nome: null,
+            email: null,
+            camiseta: null,
+            calcado: null,
+        };
+        for (const err of result.error.errors) {
+            errors.value[err.path[0]] = err.message;
+        }
+        return false;
+    }
+    return true;
+};
 
 const submitForm = async () => {
-    if (formValido.value) {
-        try {
-            await api.post("/", {
-                cpf: form.value.cpf,
-                name: form.value.nome,
-                email: form.value.email,
-                shirtSize: form.value.camiseta,
-                shoeSize: Number.parseInt(form.value.calcado)
-            });
-            alert("Funcionário cadastrado com sucesso!");
+    if (!validateForm()) {
+        return;
+    }
 
-            form.value = {
-                cpf: "",
-                nome: "",
-                email: "",
-                camiseta: "",
-                calcado: null,
-            };
+    try {
+        await api.post("/", {
+            cpf: form.value.cpf,
+            name: form.value.nome,
+            email: form.value.email,
+            shirtSize: form.value.camiseta,
+            shoeSize: Number.parseInt(form.value.calcado)
+        });
+        alert("Funcionário cadastrado com sucesso!");
 
-            router.push('/');
+        form.value = {
+            cpf: "",
+            nome: "",
+            email: "",
+            camiseta: "",
+            calcado: null,
+        };
 
-        } catch (error) {
-            console.error("Erro ao cadastrar funcionário:", error.response?.data || error.message);
-            alert("Erro ao cadastrar funcionário. Verifique os dados e tente novamente.");
-        }
+        errors.value = { cpf: null, nome: null, email: null, camiseta: null, calcado: null };
+        router.push('/');
+
+    } catch (error) {
+        console.error("Erro ao cadastrar funcionário:", error.response?.data || error.message);
+        alert("Erro ao cadastrar funcionário. Verifique os dados e tente novamente.");
     }
 };
 </script>
@@ -59,15 +93,15 @@ const submitForm = async () => {
             <div class="form-group">
                 <div>
                     <label for="cpf">CPF:</label>
-                    <span v-if="!validCpf" class="error">CPF inválido</span>
+                    <span v-if="errors.cpf" class="error">{{ errors.cpf }}</span>
                 </div>
-                <input @input="formatarCPF" type="text" id="cpf" v-model="form.cpf" placeholder="Digite o CPF" />
+                <input type="text" id="cpf" v-model="form.cpf" placeholder="Digite o CPF" />
             </div>
 
             <div class="form-group">
                 <div>
                     <label for="nome">Nome:</label>
-                    <span v-if="form.nome === ''" class="error">Nome obrigatório</span>
+                    <span v-if="errors.nome" class="error">{{ errors.nome }}</span>
                 </div>
                 <input type="text" id="nome" v-model="form.nome" placeholder="Digite o nome" />
             </div>
@@ -75,7 +109,7 @@ const submitForm = async () => {
             <div class="form-group">
                 <div>
                     <label for="email">Email:</label>
-                    <span v-if="!validEmail" class="error">Email inválido</span>
+                    <span v-if="errors.email" class="error">{{ errors.email }}</span>
                 </div>
                 <input type="email" id="email" v-model="form.email" placeholder="Digite o email" />
             </div>
@@ -83,7 +117,7 @@ const submitForm = async () => {
             <div class="form-group">
                 <div>
                     <label for="camiseta">Tamanho de Camiseta:</label>
-                    <span v-if="form.camiseta === ''" class="error">Selecione um tamanho</span>
+                    <span v-if="errors.camiseta" class="error">{{ errors.camiseta }}</span>
                 </div>
                 <select id="camiseta" v-model="form.camiseta">
                     <option disabled value="">Selecione um tamanho</option>
@@ -96,14 +130,11 @@ const submitForm = async () => {
             <div class="form-group">
                 <div>
                     <label for="calcado">Tamanho de Calçado:</label>
-
-                    <span v-if="form.calcado < 34 || form.calcado > 48" class="error">
-                        O tamanho deve ser entre 34 e 48
-                    </span>
+                    <span v-if="errors.calcado" class="error">{{ errors.calcado }}</span>
                 </div>
                 <input type="number" id="calcado" v-model="form.calcado" min="34" max="48" />
             </div>
-            <button type="submit" :disabled="!formValido">Cadastrar</button>
+            <button type="submit">Cadastrar</button>
         </form>
     </div>
 </template>
